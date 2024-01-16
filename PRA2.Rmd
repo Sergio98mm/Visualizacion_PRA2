@@ -1,0 +1,134 @@
+---
+title: 'Visualizacion'
+author: "Autor: Sergio Morales Machado"
+date: "Enero 2024"
+output:
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 2
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+
+
+
+
+
+
+
+Vamos a cargar el archivo de datos
+
+```{r}
+data_url = 'ds_salaries.csv '
+salaries <- read.csv(data_url)
+```
+
+```{r}
+if (!require("dplyr")) install.packages("dplyr"); library(dplyr)
+salaries <- salaries %>%
+  mutate(experience_level = recode(experience_level,
+                                   'EN' = 'Entry-Level',
+                                   'MI' = 'Mid-Level',
+                                   'SE' = 'Senior',
+                                   'EX' = 'Executive'))
+```
+
+# ¿Cómo afecta el país del empleado al sueldo?
+
+```{r}
+library(countrycode)
+
+salaries <- salaries %>%
+  mutate(employee_residence = countrycode(employee_residence, origin = 'iso2c', destination = 'iso3c', warn = FALSE))
+
+```
+
+```{r}
+library(dplyr)
+library(plotly)
+
+salario_medio_por_pais <- salaries %>%
+  group_by(employee_residence) %>%
+  summarize(Salario_Medio = mean(salary_in_usd, na.rm = TRUE))
+salario_medio_por_pais <- salario_medio_por_pais %>%
+  filter(employee_residence != "ISR") # eliminado por valor atípico
+fig <- plot_ly(type = 'choropleth', locationmode = 'ISO-3') %>%
+  add_trace(z = ~salario_medio_por_pais$Salario_Medio, locations = ~salario_medio_por_pais$employee_residence) %>%
+  layout(title = "Salary per Country",
+         geo = list(scope = 'world', showframe = FALSE, projection = list(type = 'mercator')),
+         colorbar = list(tickvals = c(0, 170000), ticktext = c("0", "170k"), tickmode = "array"),
+         legend = list(title = "Salary"))
+
+fig
+```
+
+
+# ¿Cómo afecta el tamaño de la compañía al sueldo? y ¿Qué diferencias de salarios podemos ver entre los distintos roles y niveles formativos?
+
+```{r}
+employees_by_country <- table(salaries$company_location)
+employees_by_country <- sort(employees_by_country, decreasing = TRUE)
+head(employees_by_country, 5)
+
+```
+
+Debido a la cantidad de empelos de diferencia entre países no tendría sentido comparar datos entre países debido a que no quedaría compensado por falta de muestras por lo que vamos a trabajar con los datos de US
+
+
+
+
+
+```{r}
+
+library(dplyr)
+library(plotly)
+
+nuevo_dataset_us <- subset(salaries, company_location == "US")
+
+media_salarios <- nuevo_dataset_us %>%
+  group_by(experience_level, company_size) %>%
+  summarize(Media_Salario = mean(salary_in_usd))
+
+fig <- plot_ly(media_salarios, x = ~experience_level, y = ~Media_Salario, color = ~company_size, type = 'bar') %>%
+  layout(title = "Salary per Experience Level and Company Size",
+         xaxis = list(title = "Experience"),
+         yaxis = list(title = "Salary (USD)"))
+
+fig
+```
+
+
+
+```{r Fig3, echo=TRUE,fig.height=20, fig.width = 15}
+library(tidyr)
+library(dplyr)
+library(plotly)
+library(reshape2)
+
+media_salarios_por_title <- nuevo_dataset_us %>%
+  group_by(work_year, job_title) %>%
+  summarize(Media_Salario = mean(salary_in_usd))
+
+media_salarios_por_title <- media_salarios_por_title %>%
+  pivot_wider(names_from = job_title, values_from = Media_Salario)
+
+media_salarios_por_title <- melt(media_salarios_por_title, id.vars = "work_year", variable.name = "job_title", value.name = "Media_Salario")
+
+fig <- plot_ly(data = media_salarios_por_title, x = ~work_year, y = ~Media_Salario, color = ~job_title, type = 'scatter', mode = 'lines+markers') %>%
+  layout(title = "Salary Evolution per Job Title",
+         xaxis = list(title = "Year"),
+         yaxis = list(title = "Salary (USD)"),
+         width = 800, 
+         height = 600)
+
+fig
+
+
+```
+
+
